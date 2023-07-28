@@ -1,2 +1,0 @@
-# rsyncjava
-Rsync dengan java
