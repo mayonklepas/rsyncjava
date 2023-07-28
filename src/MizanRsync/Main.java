@@ -24,6 +24,7 @@ import java.util.TimerTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import sun.security.util.Password;
 
 /**
  *
@@ -46,27 +47,32 @@ public class Main {
         }
         String host = prop.getProperty("rsync.host");
         String username = prop.getProperty("rsync.username");
-        String password = prop.getProperty("rsync.password");
+        //String password = prop.getProperty("rsync.password");
         String serverPath = prop.getProperty("rsync.serverpath");
         String localPath = prop.getProperty("rsync.localpath");
         String intervalString = prop.getProperty("rsync.interval");
         int interval = Integer.parseInt(intervalString);
+        
+        String os = System.getProperty("os.name");
 
         TimerTask tt = new TimerTask() {
             @Override
             public void run() {
                 try {
 
-                    //String command = "cmd.exe /c wsl sshpass -p '{{password}}' rsync -avzP /mnt/d/test/ mulyadi@103.226.139.97:/home/mulyadi/";
-                    String command = "cmd.exe /c wsl sshpass -p '{{password}}' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
-                    command = command.replace("{{password}}", password)
-                            .replace("{{localPath}}", localPath)
+                    String command = "sshpass -p 'Bk201!@#' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
+                    
+                    if(os.toLowerCase().contains("windows")){
+                        command = "cmd.exe /c wsl sshpass -p 'Bk201!@#' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
+                    }
+                                       
+                    command = command.replace("{{localPath}}", localPath)
                             .replace("{{username}}", username)
                             .replace("{{host}}", host)
                             .replace("{{serverPath}}", serverPath);
 
                     System.out.println(command);
-                    
+
                     Runtime rt = Runtime.getRuntime();
                     Process p = rt.exec(command);
 
