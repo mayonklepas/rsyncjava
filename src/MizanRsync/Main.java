@@ -4,27 +4,27 @@
  */
 package MizanRsync;
 
-import com.sun.javafx.scene.control.skin.VirtualFlow;
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
+
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.Properties;
-import java.util.Scanner;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import sun.security.util.Password;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  *
@@ -47,53 +47,90 @@ public class Main {
         }
         String host = prop.getProperty("rsync.host");
         String username = prop.getProperty("rsync.username");
-        //String password = prop.getProperty("rsync.password");
+        String password = prop.getProperty("rsync.password");
         String serverPath = prop.getProperty("rsync.serverpath");
         String localPath = prop.getProperty("rsync.localpath");
         String intervalString = prop.getProperty("rsync.interval");
         int interval = Integer.parseInt(intervalString);
-        
+
         String os = System.getProperty("os.name");
 
-        TimerTask tt = new TimerTask() {
-            @Override
-            public void run() {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            while (true) {
                 try {
 
-                    String command = "sshpass -p 'Bk201!@#' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
-                    
-                    if(os.toLowerCase().contains("windows")){
-                        command = "cmd.exe /c wsl sshpass -p 'Bk201!@#' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
+                    boolean isActiveConnection = new Main().getIsActiveConnection();
+
+                    if (isActiveConnection == false) {
+
+                        String command = "sshpass -p '{{password}}' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
+
+                        if (os.toLowerCase().contains("windows")) {
+                            command = "cmd.exe /c wsl sshpass -p '{{password}}' rsync -avzP {{localPath}} {{username}}@{{host}}:{{serverPath}}";
+                        }
+
+                        command = command.replace("{{password}}", password)
+                                .replace("{{localPath}}", localPath)
+                                .replace("{{username}}", username)
+                                .replace("{{host}}", host)
+                                .replace("{{serverPath}}", serverPath);
+
+                        String strip = Stream.iterate(0, x -> x + 1).limit(command.length()).map(d -> "-").collect(Collectors.joining());
+
+                        System.out.println("\n");
+                        System.out.println(strip);
+                        System.out.println(command);
+                        System.out.println(strip);
+
+                        Runtime rt = Runtime.getRuntime();
+                        Process p = rt.exec(command);
+
+                        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                            String result = br.lines().collect(Collectors.joining(System.lineSeparator()));
+                            System.out.println(result);
+                        }
+
+                        try (BufferedReader brError = new BufferedReader(new InputStreamReader(p.getErrorStream()))) {
+                            String resultError = brError.lines().collect(Collectors.joining(System.lineSeparator()));
+                            System.out.println(resultError);
+                        }
                     }
-                                       
-                    command = command.replace("{{localPath}}", localPath)
-                            .replace("{{username}}", username)
-                            .replace("{{host}}", host)
-                            .replace("{{serverPath}}", serverPath);
 
-                    System.out.println(command);
-
-                    Runtime rt = Runtime.getRuntime();
-                    Process p = rt.exec(command);
-
-                    BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                    String result = br.lines().collect(Collectors.joining(System.lineSeparator()));
-                    System.out.println(result);
-                    br.close();
-
-                    BufferedReader brError = new BufferedReader(new InputStreamReader(p.getErrorStream()));
-                    String resultError = brError.lines().collect(Collectors.joining(System.lineSeparator()));
-                    System.out.println(resultError);
-                    brError.close();
                 } catch (IOException ex) {
-                    ex.printStackTrace();
+                    Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+                }
+
+                try {
+                    Thread.sleep(interval);
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
-        };
 
-        Timer t = new Timer();
-        t.scheduleAtFixedRate(tt, 1000 * 10, 1000 * interval);
+        });
 
+    }
+
+    public boolean getIsActiveConnection() {
+        try {
+            URL url = new URL("http://mizancloud.com:8080/biling/user-layanan/check-active-backup-service?kodeCompany=attijaroh");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.connect();
+            InputStream is = connection.getInputStream();
+            String result = new BufferedReader(new InputStreamReader(is)).lines().collect(Collectors.joining(System.lineSeparator()));
+            System.out.println(result);
+            if (result.contains("1")) {
+                return false;
+            }
+
+            return true;
+        } catch (MalformedURLException ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return false;
     }
 
 }
